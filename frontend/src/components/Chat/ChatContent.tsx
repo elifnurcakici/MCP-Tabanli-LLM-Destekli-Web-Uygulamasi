@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import { ArrowUp, Loader2 } from "lucide-react";
+import { ArrowUp, ChevronDown, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/utils/formatDate";
-import type { MessageWithCitations } from "@/api/chats";
+import type { Citation, MessageWithCitations } from "@/api/chats";
 
 interface ChatContentProps {
   messages: MessageWithCitations[];
@@ -15,6 +15,20 @@ interface ChatContentProps {
   hasActiveChat: boolean;
   uploadError: string | null;
   onSubmit: (e: React.FormEvent) => void;
+}
+
+function citationPageLabel(citation: Citation) {
+  if (!citation.pageStart || !citation.pageEnd) {
+    return "Sayfa bilgisi yok";
+  }
+
+  return citation.pageStart === citation.pageEnd
+    ? `Sayfa ${citation.pageStart}`
+    : `Sayfa ${citation.pageStart}-${citation.pageEnd}`;
+}
+
+function uniqueCitationPageLabels(citations: Citation[]) {
+  return Array.from(new Set(citations.map(citationPageLabel)));
 }
 
 export function ChatContent({
@@ -65,6 +79,9 @@ export function ChatContent({
 
               {messages.map((m) => {
                 const isUser = m.role === "USER";
+                const citationPageLabels = m.citations?.length
+                  ? uniqueCitationPageLabels(m.citations)
+                  : [];
 
                 return (
                   <div
@@ -90,34 +107,22 @@ export function ChatContent({
                       </div>
 
                       {!isUser && m.citations?.length ? (
-                        <div className="ml-1 max-w-2xl rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                          <p className="mb-2 text-[11px] italic text-zinc-500 dark:text-zinc-400">
-                            Kaynaklar
-                          </p>
-                          <div className="space-y-2">
-                            {m.citations.map((citation, index) => {
-                              const pageLabel =
-                                citation.pageStart && citation.pageEnd
-                                  ? citation.pageStart === citation.pageEnd
-                                    ? `Sayfa ${citation.pageStart}`
-                                    : `Sayfa ${citation.pageStart}-${citation.pageEnd}`
-                                  : "Sayfa bilgisi yok";
-
-                              return (
-                                <div key={`${m.id}-${citation.chunkId}-${index}`} className="space-y-1">
-                                  <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                                    {pageLabel}
-                                  </p>
-                                  {citation.preview ? (
-                                    <p className="italic text-zinc-600 dark:text-zinc-400">
-                                      {citation.preview}
-                                    </p>
-                                  ) : null}
-                                </div>
-                              );
-                            })}
+                        <details className="group ml-1 max-w-2xl rounded-lg border border-dashed border-zinc-300 bg-zinc-50 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-[11px] italic text-zinc-500 outline-none transition-colors hover:text-zinc-700 focus-visible:ring-2 focus-visible:ring-ring dark:text-zinc-400 dark:hover:text-zinc-200 [&::-webkit-details-marker]:hidden">
+                            <span>Kaynaklar ({citationPageLabels.length})</span>
+                            <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" />
+                          </summary>
+                          <div className="max-h-44 space-y-2 overflow-y-auto border-t border-dashed border-zinc-300 px-3 py-2 dark:border-zinc-700">
+                            {citationPageLabels.map((pageLabel) => (
+                              <p
+                                key={`${m.id}-${pageLabel}`}
+                                className="font-medium text-zinc-800 dark:text-zinc-200"
+                              >
+                                {pageLabel}
+                              </p>
+                            ))}
                           </div>
-                        </div>
+                        </details>
                       ) : null}
                     </div>
                   </div>

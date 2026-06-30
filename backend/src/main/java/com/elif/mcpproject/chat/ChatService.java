@@ -25,11 +25,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 @Getter @Setter @Builder
 public class ChatService {
+    private static final Pattern SOURCE_TAG_PATTERN = Pattern.compile(
+            "\\s*\\[source:\\s*\\d+\\s+page:\\s*[^\\]]+\\]\\s*[,;]?\\s*",
+            Pattern.CASE_INSENSITIVE
+    );
+
     private final ChatRepository chatRepository;
     private final MessageRepository messageRepository;
     private final DocumentRepository documentRepository;
@@ -104,7 +110,7 @@ public class ChatService {
                         m.getId(),
                         m.getRole().name(),
                         m.getStatus().name(),
-                        messageCryptoService.decrypt(m.getContent()),
+                        responseContent(m),
                         m.getCreatedAt()
                 ));
     }
@@ -199,7 +205,7 @@ public class ChatService {
                 .chat(chat)
                 .role(Message.Role.ASSISTANT)
                 .status(Message.Status.CREATED)
-                .content(messageCryptoService.encrypt(answerResult.answer()))
+                .content(messageCryptoService.encrypt(cleanAssistantAnswer(answerResult.answer())))
                 .createdAt(Instant.now())
                 .build();
 
@@ -217,9 +223,16 @@ public class ChatService {
                 m.getId(),
                 m.getRole().name(),
                 m.getStatus().name(),
-                messageCryptoService.decrypt(m.getContent()),
+                responseContent(m),
                 m.getCreatedAt()
         );
+    }
+
+    private String responseContent(Message message) {
+        String content = messageCryptoService.decrypt(message.getContent());
+        return message.getRole() == Message.Role.ASSISTANT
+                ? cleanAssistantAnswer(content)
+                : content;
     }
 
     private List<CitationResponse> toCitationResponses(List<AiMcpClient.Citation> citations) {
@@ -238,7 +251,7 @@ public class ChatService {
                         citation.startOffset(),
                         citation.endOffset(),
                         citation.score(),
-                        pagePreview(citation.pageStart(), citation.pageEnd())
+                        ""
             ));
         }
 
@@ -249,17 +262,17 @@ public class ChatService {
         return (pageStart == null ? "?" : pageStart) + "-" + (pageEnd == null ? "?" : pageEnd);
     }
 
-    private String pagePreview(Integer pageStart, Integer pageEnd) {
-        if (pageStart == null && pageEnd == null) {
+    private String cleanAssistantAnswer(String answer) {
+        if (answer == null || answer.isBlank()) {
             return "";
         }
-        if (pageStart == null) {
-            return "Sayfa " + pageEnd;
-        }
-        if (pageEnd == null || pageStart.equals(pageEnd)) {
-            return "Sayfa " + pageStart;
-        }
-        return "Sayfa " + pageStart + "-" + pageEnd;
+
+        return SOURCE_TAG_PATTERN.matcher(answer)
+                .replaceAll(" ")
+                .replaceAll("\\s+([,.!?;:])", "$1")
+                .replaceAll("([,;])\\s*$", "")
+                .replaceAll("[ \\t]{2,}", " ")
+                .trim();
     }
 
     private String buildChatTitle(String firstQuestion) {
